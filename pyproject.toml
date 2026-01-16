@@ -1,0 +1,15 @@
+[project]
+name = "lerobot-openarm"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "lerobot[all]>=0.4.2",
+    "openarm-can>=1.2.3",
+]
+
+[dependency-groups]
+dev = [
+    "pybind11-stubgen>=2.5.5",
+]

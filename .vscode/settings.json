@@ -1,0 +1,10 @@
+{
+  "python.analysis.stubPath": "typings",
+  "cSpell.words": [
+    "lerobot",
+    "openarm",
+    "teleop",
+    "Teleoperator",
+    "teleoperators"
+  ]
+}
