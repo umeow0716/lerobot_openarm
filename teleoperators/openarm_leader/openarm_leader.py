@@ -14,17 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import threading
 import logging
 import time
 import openarm_can as oa
-
-from lerobot.motors import Motor, MotorCalibration, MotorNormMode
-from lerobot.motors.dynamixel import (
-    DriveMode,
-    DynamixelMotorsBus,
-    OperatingMode,
-)
 
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
 
@@ -43,30 +35,23 @@ class OpenArmLeader(Teleoperator):
     """
 
     config_class = OpenArmConfig
-    name = "koch_leader"
+    name = "openarm_leader"
 
     def __init__(self, config: OpenArmConfig):
         super().__init__(config)
         self.config = config
         self.right_arm = oa.OpenArm(self.config.right_port, self.config.enable_fd)
         self.left_arm  = oa.OpenArm(self.config.left_port,  self.config.enable_fd)
-        
-        self.right_refresh_thread = None
-        self.left_refresh_thread = None
-        
+
         self._is_connected = False
 
     @property
     def action_features(self) -> dict[str, type]:
         action = {}
         
-        for i, motor in enumerate(self.right_arm.get_arm().get_motors()):
-            action[f'RJ{i+1}.pos'] = motor.get_position()
-        action['RJ8'] = self.right_arm.get_gripper().get_motor().get_position()
-        
-        for i, motor in enumerate(self.left_arm.get_arm().get_motors()):
-            action[f'LJ{i+1}.pos'] = motor.get_position()
-        action['LJ8'] = self.left_arm.get_gripper().get_motor().get_position()
+        for i in range(8):
+            action[f'RJ{i+1}.pos'] = float
+            action[f'LJ{i+1}.pos'] = float
         
         return action
 
@@ -82,7 +67,7 @@ class OpenArmLeader(Teleoperator):
         if self.is_connected:
             raise DeviceAlreadyConnectedError(f"{self} already connected")
 
-        if not self.is_calibrated and calibrate:
+        if calibrate and not self.is_calibrated:
             logger.info(
                 "Mismatch between calibration values in the motor and the calibration file or no calibration file found"
             )
@@ -99,42 +84,20 @@ class OpenArmLeader(Teleoperator):
     def calibrate(self) -> None:
         raise NotImplementedError('calibrate() method not implemented in OpenArmLeader')
 
-    # def configure(self) -> None:
-    #     self.bus.disable_torque()
-    #     self.bus.configure_motors()
-    #     for motor in self.bus.motors:
-    #         if motor != "gripper":
-    #             # Use 'extended position mode' for all motors except gripper, because in joint mode the servos
-    #             # can't rotate more than 360 degrees (from 0 to 4095) And some mistake can happen while
-    #             # assembling the arm, you could end up with a servo with a position 0 or 4095 at a crucial
-    #             # point
-    #             self.bus.write("Operating_Mode", motor, OperatingMode.EXTENDED_POSITION.value)
-
-    #     # Use 'position control current based' for gripper to be limited by the limit of the current.
-    #     # For the follower gripper, it means it can grasp an object without forcing too much even tho,
-    #     # its goal position is a complete grasp (both gripper fingers are ordered to join and reach a touch).
-    #     # For the leader gripper, it means we can use it as a physical trigger, since we can force with our finger
-    #     # to make it move, and it will move back to its original target position when we release the force.
-    #     self.bus.write("Operating_Mode", "gripper", OperatingMode.CURRENT_POSITION.value)
-    #     # Set gripper's goal pos in current position mode so that we can use it as a trigger.
-    #     self.bus.enable_torque("gripper")
-    #     if self.is_calibrated:
-    #         self.bus.write("Goal_Position", "gripper", self.config.gripper_open_pos)
-    
     def configure(self) -> None:
         self.right_arm.init_arm_motors(self.config.motor_types, self.config.send_ids, self.config.recv_ids)
         self.right_arm.init_gripper_motor(self.config.gripper_motor_type, self.config.gripper_motor_send_id, self.config.gripper_motor_recv_id)
+        self.right_arm.get_arm().set_control_mode_all(oa.ControlMode.MIT) # type: ignore
+        self.right_arm.get_gripper().set_control_mode_all(oa.ControlMode.MIT) # type: ignore
         self.right_arm.set_callback_mode_all(oa.CallbackMode.STATE)
         self.right_arm.enable_all()
-        self.right_refresh_thread = threading.Thread(target=self._refresh_thread, args=(self.right_arm, ), daemon=True)
-        self.right_refresh_thread.start()
         
         self.left_arm.init_arm_motors(self.config.motor_types, self.config.send_ids, self.config.recv_ids)
         self.left_arm.init_gripper_motor(self.config.gripper_motor_type, self.config.gripper_motor_send_id, self.config.gripper_motor_recv_id)
+        self.left_arm.get_arm().set_control_mode_all(oa.ControlMode.MIT) # type: ignore
+        self.left_arm.get_gripper().set_control_mode_all(oa.ControlMode.MIT) # type: ignore
         self.left_arm.set_callback_mode_all(oa.CallbackMode.STATE)
         self.left_arm.enable_all()
-        self.left_refresh_thread = threading.Thread(target=self._refresh_thread, args=(self.left_arm, ), daemon=True)
-        self.left_refresh_thread.start()
 
     def setup_motors(self) -> None:
         raise NotImplementedError('setup_motors() method not implemented in OpenArmLeader')
@@ -145,15 +108,20 @@ class OpenArmLeader(Teleoperator):
 
         start = time.perf_counter()
         
-        action = {}
         self.right_arm.refresh_all()
+        self.right_arm.recv_all()
+        
+        self.left_arm.refresh_all()
+        self.left_arm.recv_all()
+
+        action = {}
         for i, motor in enumerate(self.right_arm.get_arm().get_motors()):
             action[f'RJ{i+1}.pos'] = motor.get_position()
-        action['RJ8'] = self.right_arm.get_gripper().get_motor().get_position()
+        action['RJ8.pos'] = self.right_arm.get_gripper().get_motor().get_position()
         
         for i, motor in enumerate(self.left_arm.get_arm().get_motors()):
             action[f'LJ{i+1}.pos'] = motor.get_position()
-        action['LJ8'] = self.left_arm.get_gripper().get_motor().get_position()
+        action['LJ8.pos'] = self.left_arm.get_gripper().get_motor().get_position()
         
         dt_ms = (time.perf_counter() - start) * 1e3
         logger.debug(f"{self} read action: {dt_ms:.1f}ms")
@@ -167,14 +135,11 @@ class OpenArmLeader(Teleoperator):
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
 
+        self._is_connected = False
+        time.sleep(0.1)
         self.right_arm.disable_all()
         self.left_arm.disable_all()
-        self._is_connected = False
-        
-        logger.info(f"{self} disconnected.")
+        self.right_arm.recv_all(610)
+        self.left_arm.recv_all(610)
 
-    @staticmethod
-    def _refresh_thread(arm: oa.OpenArm):
-        while True:
-            arm.refresh_all()
-            arm.recv_all(610)
+        logger.info(f"{self} disconnected.")

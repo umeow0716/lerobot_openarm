@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from openarm_can import MotorType
 
@@ -30,9 +30,11 @@ class OpenArmConfig(TeleoperatorConfig):
     
     enable_fd: bool
     
-    motor_types: list[MotorType] = [
-        MotorType.DM8009, MotorType.DM8009, MotorType.DM4340, MotorType.DM4340,
-        MotorType.DM4310, MotorType.DM4310, MotorType.DM4310 ]
+    motor_types: list[MotorType] = field(default_factory=lambda: [
+        MotorType.DM8009, MotorType.DM8009,
+        MotorType.DM4340, MotorType.DM4340,
+        MotorType.DM4310, MotorType.DM4310, MotorType.DM4310
+    ])
     send_ids = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 ]
     recv_ids = [0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 ]
     

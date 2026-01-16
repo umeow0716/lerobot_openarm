@@ -2108,6 +2108,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "lerobot", extra = ["all"] },
     { name = "openarm-can" },
+    { name = "python-dotenv" },
 ]
 
 [package.dev-dependencies]
@@ -2119,6 +2120,7 @@ dev = [
 requires-dist = [
     { name = "lerobot", extras = ["all"], specifier = ">=0.4.2" },
     { name = "openarm-can", specifier = ">=1.2.3" },
+    { name = "python-dotenv", specifier = ">=1.2.1" },
 ]
 
 [package.metadata.requires-dev]
